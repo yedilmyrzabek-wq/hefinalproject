@@ -155,7 +155,7 @@ def simulate(rng, questions, abilities, targets=None, lures=None):
 def seed(content):
     db_path = os.environ.get("LESSONS_DB", os.path.join(BASE, "lessons.db"))
     if os.path.exists(db_path):
-        backup = os.path.join(BASE, f"lessons.backup-{datetime.now():%Y%m%d-%H%M%S}.db")
+        backup = os.path.join(os.path.dirname(db_path), f"lessons.backup-{datetime.now():%Y%m%d-%H%M%S}.db")
         shutil.copy(db_path, backup)
         print(f"Old database saved as {os.path.basename(backup)}")
         for suffix in ("", "-wal", "-shm"):

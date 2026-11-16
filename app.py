@@ -21,7 +21,10 @@ import ai
 import stats as st
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("LESSONS_DB", os.path.join(BASE, "lessons.db"))
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+# Vercel's project folder is read-only; only /tmp is writable (and it is reset on cold starts).
+DATA_DIR = "/tmp" if ON_VERCEL else BASE
+DB_PATH = os.environ.get("LESSONS_DB", os.path.join(DATA_DIR, "lessons.db"))
 LEVELS = ["Basic", "Medium", "Advanced"]
 LANGUAGES = ["English", "Russian", "Kazakh"]
 LANG_CODES = {"English": "en", "Russian": "ru", "Kazakh": "kk"}
@@ -33,7 +36,7 @@ UTC_OFFSET = timedelta(hours=float(os.environ.get("UTC_OFFSET_HOURS", 5)))  # As
 def _secret_key():
     if os.environ.get("SECRET_KEY"):
         return os.environ["SECRET_KEY"]
-    path = os.path.join(BASE, ".secret_key")
+    path = os.path.join(DATA_DIR, ".secret_key")
     if not os.path.exists(path):
         with open(path, "w") as f:
             f.write(secrets.token_hex(32))
@@ -738,6 +741,25 @@ def student_result(quiz_id):
 
 
 init_db()
+
+if ON_VERCEL:
+    import threading
+    _seed_lock = threading.Lock()
+    _seeded = False
+
+    @app.before_request
+    def _seed_demo_once():
+        """/tmp starts empty on each new Vercel instance: add the demo teacher and classes."""
+        global _seeded
+        if _seeded:
+            return
+        with _seed_lock:
+            if not _seeded:
+                import seed as _seed
+                os.environ["LESSONS_DB"] = DB_PATH
+                if not _seed.has_data():
+                    _seed.seed(_seed.load_content())
+                _seeded = True
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False, threaded=True)
